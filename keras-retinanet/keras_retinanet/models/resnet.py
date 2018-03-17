@@ -25,9 +25,14 @@ import keras_resnet.layers
 from ..models import retinanet
 import tensorflow as tf
 import numpy as np
+import sys
+sys.path.insert(0, '../../sbnet/sbnet_tensorflow/benchmark')
+import sparse_conv_lib
 
 resnet_filename = 'ResNet-{}-model.keras.h5'
 resnet_resource = 'https://github.com/fizyr/keras-models/releases/download/v0.0.1/{}'.format(resnet_filename)
+
+sbnet_module = tf.load_op_library('../../sbnet/sbnet_tensorflow/sbnet_ops/libsbnet.so')
 
 custom_objects = retinanet.custom_objects.copy()
 custom_objects.update(keras_resnet.custom_objects)
@@ -38,7 +43,7 @@ parameters = {
     "kernel_initializer": "he_normal"
 }
 
-def generate_top_left_mask(xsize, sparsity):
+def generate_mask(xsize, sparsity):
     """
     Generates a square top-left mask with a target sparsity value.
 
@@ -52,8 +57,8 @@ def generate_top_left_mask(xsize, sparsity):
     edge_ratio = np.sqrt(density)
     height = tf.cast(tf.ceil(edge_ratio * xsize[1]), tf.int32)
     width = tf.cast(tf.ceil(edge_ratio * xsize[2]), tf.int32)
-    x = tf.Variable(tf.zeros(tf.cast(xsize[:-1], tf.int32)))
-    x[:, :height, :width] = 1.0
+    x = tf.Variable(tf.convert_to_tensor(np.zeros([1, 224, 224], dtype=np.float32)))
+    #x[:, :height, :width] = 1.0
     return x
 
 def bottleneck_2d(filters, stage=0, block=0, kernel_size=3, numerical_name=False, stride=None, freeze_bn=False):
@@ -76,6 +81,8 @@ def bottleneck_2d(filters, stage=0, block=0, kernel_size=3, numerical_name=False
     stage_char = str(stage + 2)
 
     def f(x):
+	#x = tf.nn.conv2d(x, tf.constant(np.zeros([1, 1, 1, xsize[-1]], dtype=np.float32) + 1.0) , strides=[1,1,1,1],padding='SAME')
+	#x = tf.cast(x, tf.float64)
         y = keras.layers.Conv2D(filters, (1, 1), strides=stride, use_bias=False, name="res{}{}_branch2a".format(stage_char, block_char), **parameters)(x)
         y = keras_resnet.layers.BatchNormalization(axis=axis, epsilon=1e-5, freeze=freeze_bn, name="bn{}{}_branch2a".format(stage_char, block_char))(y)
         y = keras.layers.Activation("relu", name="res{}{}_branch2a_relu".format(stage_char, block_char))(y)
@@ -112,7 +119,17 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, freeze_bn=True
 
     xsize = tf.cast(tf.shape(inputs), tf.float32)
     sparsity = 0.5
-    mask = generate_top_left_mask(xsize, sparsity)
+    mask = generate_mask(xsize, sparsity)
+    block_params = sparse_conv_lib.calc_block_params([1, 224, 224, 3], [1, 5, 5, 1], [1, 1, 64, 64], [1,1,1,1], 'SAME')
+    print(block_params)
+
+    indices = sbnet_module.reduce_mask(
+        mask, tf.constant(block_params.bcount, dtype=tf.int32),
+        bsize=block_params.bsize,
+        boffset=block_params.boffset,
+        bstride=block_params.bstrides,
+        tol=0.5, # pooling threshold to consider a block as active
+        avgpool=True) # max pooling by default
 
     x = keras.layers.ZeroPadding2D(padding=3, name="padding_conv1")(inputs)
     x = keras.layers.Conv2D(64, (7, 7), strides=(2, 2), use_bias=False, name="conv1")(x)
@@ -124,9 +141,20 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, freeze_bn=True
 
     outputs = []
 
+    # build kwargs to simplify op calls
+    blockParams = { "bsize": block_params.bsize, "boffset": block_params.boffset, "bstride": block_params.bstrides }
+
     for stage_id, iterations in enumerate(blocks):
         for block_id in range(iterations):
-            x = block(features, stage_id, block_id, numerical_name=(block_id > 0 and numerical_names[stage_id]), freeze_bn=freeze_bn)(x)
+            blockStack = sbnet_module.sparse_gather(x, indices.bin_counts, indices.active_block_indices, transpose=False, **blockParams)
+            print('=======================================')
+            print(x)
+            print(tf.shape(blockStack))
+            print('=======================================')
+            convBlocks = block(features, stage_id, block_id, numerical_name=(block_id > 0 and numerical_names[stage_id]), freeze_bn=freeze_bn)(blockStack)
+            x = sbnet_module.sparse_scatter(
+    convBlocks, indices.bin_counts, indices.active_block_indices,
+    x, transpose=False, add=False, atomic=False, **blockParams)
 
         features *= 2
 
@@ -183,6 +211,7 @@ def resnet_retinanet(num_classes, backbone='resnet50', inputs=None, modifier=Non
     # choose default input
     if inputs is None:
         inputs = keras.layers.Input(shape=(None, None, 3))
+        #inputs = keras.layers.Input(batch_shape=(1, 224, 224, 3))
 
     # create the resnet backbone
     if backbone == 'resnet50':
