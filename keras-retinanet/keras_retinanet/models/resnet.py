@@ -81,8 +81,7 @@ def bottleneck_2d(filters, stage=0, block=0, kernel_size=3, numerical_name=False
     stage_char = str(stage + 2)
 
     def f(x):
-	#x = tf.nn.conv2d(x, tf.constant(np.zeros([1, 1, 1, xsize[-1]], dtype=np.float32) + 1.0) , strides=[1,1,1,1],padding='SAME')
-	#x = tf.cast(x, tf.float64)
+        print(x)
         y = keras.layers.Conv2D(filters, (1, 1), strides=stride, use_bias=False, name="res{}{}_branch2a".format(stage_char, block_char), **parameters)(x)
         y = keras_resnet.layers.BatchNormalization(axis=axis, epsilon=1e-5, freeze=freeze_bn, name="bn{}{}_branch2a".format(stage_char, block_char))(y)
         y = keras.layers.Activation("relu", name="res{}{}_branch2a_relu".format(stage_char, block_char))(y)
@@ -146,15 +145,27 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, freeze_bn=True
 
     for stage_id, iterations in enumerate(blocks):
         for block_id in range(iterations):
-            blockStack = sbnet_module.sparse_gather(x, indices.bin_counts, indices.active_block_indices, transpose=False, **blockParams)
+            blockStack = keras.layers.Lambda(lambda tmp: sbnet_module.sparse_gather(tmp, indices.bin_counts, indices.active_block_indices, transpose=False, **blockParams))(x)
+            blockStack = keras.layers.Reshape((5, 5, features), input_shape=(indices.bin_counts, 5, 5, features))(blockStack)
+            #tf_blockStack = sbnet_module.sparse_gather(x, indices.bin_counts, indices.active_block_indices, transpose=False, **blockParams)
+            #tf_blockStack = tf.reshape(tf_blockStack, [1, 5, 5, features])
+            #blockStack = keras.layers.Input(batch_shape=(1, 5, 5, features), tensor = tf_blockStack)
             print('=======================================')
             print(x)
-            print(tf.shape(blockStack))
+            print(blockStack)
             print('=======================================')
-            convBlocks = block(features, stage_id, block_id, numerical_name=(block_id > 0 and numerical_names[stage_id]), freeze_bn=freeze_bn)(blockStack)
-            x = sbnet_module.sparse_scatter(
-    convBlocks, indices.bin_counts, indices.active_block_indices,
-    x, transpose=False, add=False, atomic=False, **blockParams)
+            convBlocks = block(features, stage_id, 0, numerical_name=(block_id > 0 and numerical_names[stage_id]), freeze_bn=freeze_bn)(blockStack)
+            x = keras.layers.Lambda(lambda tmp: sbnet_module.sparse_scatter(
+                tmp, indices.bin_counts, indices.active_block_indices,
+                x, transpose=False, add=False, atomic=False, **blockParams)
+                )(convBlocks)
+            x = keras.layers.Reshape((None, None, features))(x)
+            #tf_x = sbnet_module.sparse_scatter(
+    #convBlocks, indices.bin_counts, indices.active_block_indices,
+    #x, transpose=False, add=False, atomic=False, **blockParams)
+            #tf_x = tf.reshape(tf_x, [1, 5, 5, features * 4])
+            #x = keras.layers.Reshape([5, 5, features * 4])(tf_x)
+            #x = keras.layers.Input(batch_shape=(1, 5, 5, features * 4), tensor = tf_x)
 
         features *= 2
 
@@ -210,8 +221,8 @@ def resnet_retinanet(num_classes, backbone='resnet50', inputs=None, modifier=Non
 
     # choose default input
     if inputs is None:
-        inputs = keras.layers.Input(shape=(None, None, 3))
-        #inputs = keras.layers.Input(batch_shape=(1, 224, 224, 3))
+        #inputs = keras.layers.Input(shape=(None, None, 3))
+        inputs = keras.layers.Input(batch_shape=(1, 224, 224, 3))
 
     # create the resnet backbone
     if backbone == 'resnet50':
