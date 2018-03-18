@@ -21,6 +21,7 @@ import keras_resnet
 import keras_resnet.models
 import keras_resnet.blocks
 import keras_resnet.layers
+import keras.backend as K
 
 from ..models import retinanet
 import tensorflow as tf
@@ -40,7 +41,7 @@ custom_objects.update(keras_resnet.custom_objects)
 allowed_backbones = ['resnet50', 'resnet101', 'resnet152']
 
 parameters = {
-    "kernel_initializer": "he_normal"
+    "kernel_initializer": "he_normal",
 }
 
 def generate_mask(xsize, sparsity):
@@ -57,16 +58,17 @@ def generate_mask(xsize, sparsity):
     edge_ratio = np.sqrt(density)
     height = tf.cast(tf.ceil(edge_ratio * xsize[1]), tf.int32)
     width = tf.cast(tf.ceil(edge_ratio * xsize[2]), tf.int32)
-    x = tf.Variable(tf.convert_to_tensor(np.zeros([1, 224, 224], dtype=np.float32)))
+    x = tf.Variable(tf.convert_to_tensor(np.round(np.random.rand(1, 224, 224)), dtype=np.float32))
     #x[:, :height, :width] = 1.0
     return x
 
 def bottleneck_2d(filters, stage=0, block=0, kernel_size=3, numerical_name=False, stride=None, freeze_bn=False):
     if stride is None:
-        if block != 0 or stage == 0:
-            stride = 1
-        else:
-            stride = 2
+        stride = 1
+        #if block != 0 or stage == 0:
+        #    stride = 1
+        #else:
+        #    stride = 2
 
     if keras.backend.image_data_format() == "channels_last":
         axis = 3
@@ -81,7 +83,6 @@ def bottleneck_2d(filters, stage=0, block=0, kernel_size=3, numerical_name=False
     stage_char = str(stage + 2)
 
     def f(x):
-        print(x)
         y = keras.layers.Conv2D(filters, (1, 1), strides=stride, use_bias=False, name="res{}{}_branch2a".format(stage_char, block_char), **parameters)(x)
         y = keras_resnet.layers.BatchNormalization(axis=axis, epsilon=1e-5, freeze=freeze_bn, name="bn{}{}_branch2a".format(stage_char, block_char))(y)
         y = keras.layers.Activation("relu", name="res{}{}_branch2a_relu".format(stage_char, block_char))(y)
@@ -101,6 +102,8 @@ def bottleneck_2d(filters, stage=0, block=0, kernel_size=3, numerical_name=False
             shortcut = x
 
         y = keras.layers.Add(name="res{}{}".format(stage_char, block_char))([y, shortcut])
+       
+        print("y = ", y._keras_shape)
         y = keras.layers.Activation("relu", name="res{}{}_relu".format(stage_char, block_char))(y)
 
         return y
@@ -119,7 +122,7 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, freeze_bn=True
     xsize = tf.cast(tf.shape(inputs), tf.float32)
     sparsity = 0.5
     mask = generate_mask(xsize, sparsity)
-    block_params = sparse_conv_lib.calc_block_params([1, 224, 224, 3], [1, 5, 5, 1], [1, 1, 64, 64], [1,1,1,1], 'SAME')
+    block_params = sparse_conv_lib.calc_block_params([1, 224, 224, 3], [1, 7, 7, 1], [1, 1, 64, 64], [1,1,1,1], 'SAME')
     print(block_params)
 
     indices = sbnet_module.reduce_mask(
@@ -137,37 +140,40 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, freeze_bn=True
     x = keras.layers.MaxPooling2D((3, 3), strides=(2, 2), padding="same", name="pool1")(x)
 
     features = 64
+    img_channels = 64
+    img_size = 56
 
     outputs = []
 
     # build kwargs to simplify op calls
     blockParams = { "bsize": block_params.bsize, "boffset": block_params.boffset, "bstride": block_params.bstrides }
 
+    sess = tf.Session()
+    sess.run(tf.global_variables_initializer())
+    bins = int(sess.run(indices.bin_counts)[0])
+    print(bins)
+    sess.close()
     for stage_id, iterations in enumerate(blocks):
         for block_id in range(iterations):
             blockStack = keras.layers.Lambda(lambda tmp: sbnet_module.sparse_gather(tmp, indices.bin_counts, indices.active_block_indices, transpose=False, **blockParams))(x)
-            blockStack = keras.layers.Reshape((5, 5, features), input_shape=(indices.bin_counts, 5, 5, features))(blockStack)
-            #tf_blockStack = sbnet_module.sparse_gather(x, indices.bin_counts, indices.active_block_indices, transpose=False, **blockParams)
-            #tf_blockStack = tf.reshape(tf_blockStack, [1, 5, 5, features])
-            #blockStack = keras.layers.Input(batch_shape=(1, 5, 5, features), tensor = tf_blockStack)
-            print('=======================================')
-            print(x)
-            print(blockStack)
-            print('=======================================')
-            convBlocks = block(features, stage_id, 0, numerical_name=(block_id > 0 and numerical_names[stage_id]), freeze_bn=freeze_bn)(blockStack)
+            blockStack2 = keras.layers.Reshape((7, 7, img_channels))(blockStack)
+            blockStack2._keras_shape = (bins, 7, 7, img_channels)
+
+            print('features= ', features)
+            print('bs2= ', blockStack2._keras_shape)
+            convBlocks = block(features, stage_id, block_id, numerical_name=(block_id > 0 and numerical_names[stage_id]), freeze_bn=freeze_bn)(blockStack2)
+            if block_id == 0:
+                img_channels = features * 4;
+                print(img_channels)
+            template_x = K.constant(np.zeros([1, img_size, img_size, features * 4]))
             x = keras.layers.Lambda(lambda tmp: sbnet_module.sparse_scatter(
-                tmp, indices.bin_counts, indices.active_block_indices,
-                x, transpose=False, add=False, atomic=False, **blockParams)
-                )(convBlocks)
-            x = keras.layers.Reshape((None, None, features))(x)
-            #tf_x = sbnet_module.sparse_scatter(
-    #convBlocks, indices.bin_counts, indices.active_block_indices,
-    #x, transpose=False, add=False, atomic=False, **blockParams)
-            #tf_x = tf.reshape(tf_x, [1, 5, 5, features * 4])
-            #x = keras.layers.Reshape([5, 5, features * 4])(tf_x)
-            #x = keras.layers.Input(batch_shape=(1, 5, 5, features * 4), tensor = tf_x)
+            tmp, indices.bin_counts, indices.active_block_indices,
+            template_x, transpose=False, add=False, atomic=False, **blockParams))(convBlocks)
+            x = keras.layers.Reshape((img_size, img_size, features * 4))(x)
+            x._keras_shape = (1, img_size, img_size, features * 4)
 
         features *= 2
+        img_size /= 2
 
         outputs.append(x)
 

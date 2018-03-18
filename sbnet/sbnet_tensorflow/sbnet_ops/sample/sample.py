@@ -31,9 +31,9 @@ def divup(a, b):
 
 # Specify input tensor dimensions and block-sparsity parameters
 batch = 4
-hw = 256
+hw = 300
 channels = 64
-blockSize = [16, 16]
+blockSize = [20, 20]
 blockStride = [14, 14]
 blockOffset = [0, 0]
 blockCount = [divup(hw, blockStride[0]), divup(hw, blockStride[1])]
@@ -77,7 +77,7 @@ blockStack = sbnet_module.sparse_gather(
     x, indices.bin_counts, indices.active_block_indices, transpose=False, **inBlockParams)
 print(sess.run(indices.bin_counts))
 print(blockCount)
-print(tf.shape(blockStack))
+print(sess.run(tf.shape(blockStack)))
 
 # perform dense convolution on a sparse stack of tiles
 convBlocks = tf.nn.conv2d(
