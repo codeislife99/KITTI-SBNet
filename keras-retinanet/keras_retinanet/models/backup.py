@@ -41,7 +41,7 @@ custom_objects.update(keras_resnet.custom_objects)
 allowed_backbones = ['resnet50', 'resnet101', 'resnet152']
 
 parameters = {
-    "kernel_initializer": "he_normal",
+    "kernel_initializer": "he_normal"
 }
 
 def generate_mask(xsize, sparsity):
@@ -64,11 +64,10 @@ def generate_mask(xsize, sparsity):
 
 def bottleneck_2d(filters, stage=0, block=0, kernel_size=3, numerical_name=False, stride=None, freeze_bn=False):
     if stride is None:
-        stride = 1
-        #if block != 0 or stage == 0:
-        #    stride = 1
-        #else:
-        #    stride = 2
+        if block != 0 or stage == 0:
+            stride = 1
+        else:
+            stride = 2
 
     if keras.backend.image_data_format() == "channels_last":
         axis = 3
@@ -95,15 +94,13 @@ def bottleneck_2d(filters, stage=0, block=0, kernel_size=3, numerical_name=False
         y = keras.layers.Conv2D(filters * 4, (1, 1), use_bias=False, name="res{}{}_branch2c".format(stage_char, block_char), **parameters)(y)
         y = keras_resnet.layers.BatchNormalization(axis=axis, epsilon=1e-5, freeze=freeze_bn, name="bn{}{}_branch2c".format(stage_char, block_char))(y)
 
-        if block == 0:
+        if block >= 0:
             shortcut = keras.layers.Conv2D(filters * 4, (1, 1), strides=stride, use_bias=False, name="res{}{}_branch1".format(stage_char, block_char), **parameters)(x)
             shortcut = keras_resnet.layers.BatchNormalization(axis=axis, epsilon=1e-5, freeze=freeze_bn, name="bn{}{}_branch1".format(stage_char, block_char))(shortcut)
         else:
             shortcut = x
 
         y = keras.layers.Add(name="res{}{}".format(stage_char, block_char))([y, shortcut])
-       
-        print("y = ", y._keras_shape)
         y = keras.layers.Activation("relu", name="res{}{}_relu".format(stage_char, block_char))(y)
 
         return y
@@ -122,7 +119,7 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, freeze_bn=True
     xsize = tf.cast(tf.shape(inputs), tf.float32)
     sparsity = 0.5
     mask = generate_mask(xsize, sparsity)
-    block_params = sparse_conv_lib.calc_block_params([1, 224, 224, 3], [1, 7, 7, 1], [1, 1, 64, 64], [1,1,1,1], 'SAME')
+    block_params = sparse_conv_lib.calc_block_params([1, 224, 224, 3], [1, 5, 5, 1], [1, 1, 64, 64], [1,1,1,1], 'SAME')
     print(block_params)
 
     indices = sbnet_module.reduce_mask(
@@ -141,39 +138,33 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, freeze_bn=True
 
     features = 64
     img_channels = 64
-    img_size = 56
 
     outputs = []
 
     # build kwargs to simplify op calls
     blockParams = { "bsize": block_params.bsize, "boffset": block_params.boffset, "bstride": block_params.bstrides }
 
-    sess = tf.Session()
-    sess.run(tf.global_variables_initializer())
-    bins = int(sess.run(indices.bin_counts)[0])
-    print(bins)
-    sess.close()
     for stage_id, iterations in enumerate(blocks):
         for block_id in range(iterations):
             blockStack = keras.layers.Lambda(lambda tmp: sbnet_module.sparse_gather(tmp, indices.bin_counts, indices.active_block_indices, transpose=False, **blockParams))(x)
-            blockStack2 = keras.layers.Reshape((7, 7, img_channels))(blockStack)
-            blockStack2._keras_shape = (bins, 7, 7, img_channels)
+            blockStack2 = keras.layers.Reshape((5, 5, img_channels))(blockStack)
+            blockStack2._keras_shape = (1, 5, 5, img_channels)
 
-            print('features= ', features)
-            print('bs2= ', blockStack2._keras_shape)
             convBlocks = block(features, stage_id, block_id, numerical_name=(block_id > 0 and numerical_names[stage_id]), freeze_bn=freeze_bn)(blockStack2)
             if block_id == 0:
+                if stage_id == 0:
+                    x = K.concatenate([x, x, x, x], axis = 3)
+                else:
+                    x = K.concatenate([x, x], axis = 3)
                 img_channels = features * 4;
-                print(img_channels)
-            template_x = K.constant(np.zeros([1, img_size, img_size, features * 4]))
             x = keras.layers.Lambda(lambda tmp: sbnet_module.sparse_scatter(
-            tmp, indices.bin_counts, indices.active_block_indices,
-            template_x, transpose=False, add=False, atomic=False, **blockParams))(convBlocks)
-            x = keras.layers.Reshape((img_size, img_size, features * 4))(x)
-            x._keras_shape = (1, img_size, img_size, features * 4)
+                tmp, indices.bin_counts, indices.active_block_indices,
+                x, transpose=False, add=False, atomic=False, **blockParams)
+                )(convBlocks)
+            x = keras.layers.Reshape((56, 56, features * 4))(x)
+            x._keras_shape = (1, 56, 56, features * 4)
 
         features *= 2
-        img_size /= 2
 
         outputs.append(x)
 

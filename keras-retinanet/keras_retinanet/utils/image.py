@@ -163,6 +163,7 @@ def apply_transform(matrix, image, params):
 def resize_image(img, min_side=800, max_side=1333):
     (rows, cols, _) = img.shape
 
+    """
     smallest_side = min(rows, cols)
 
     # rescale the image so the smallest side is min_side
@@ -173,8 +174,12 @@ def resize_image(img, min_side=800, max_side=1333):
     largest_side = max(rows, cols)
     if largest_side * scale > max_side:
         scale = max_side / largest_side
+    """
+
+    scale_x = 224.0 / rows
+    scale_y = 224.0 / cols
 
     # resize the image with the computed scale
-    img = cv2.resize(img, None, fx=scale, fy=scale)
+    img = cv2.resize(img, None, fx=scale_y, fy=scale_x)
 
-    return img, scale
+    return img, scale_x
