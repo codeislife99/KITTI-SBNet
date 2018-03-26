@@ -1,3 +1,4 @@
 /data/preprocessing/
+*.pyc
 .DS_Store
 .idea/
