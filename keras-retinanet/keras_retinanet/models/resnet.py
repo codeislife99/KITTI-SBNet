@@ -110,7 +110,7 @@ def bottleneck_2d(filters, stage=0, block=0, kernel_size=3, numerical_name=False
 
     return f
 
-def ResNet(inputs, blocks, block, include_top=True, classes=1000, freeze_bn=True, numerical_names=None, *args, **kwargs):
+def ResNet(inputs, blocks, block, include_top=True, classes=1000, freeze_bn=True, numerical_names=None, b_size=1, *args, **kwargs):
     if keras.backend.image_data_format() == "channels_last":
         axis = 3
     else:
@@ -159,18 +159,17 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, freeze_bn=True
             blockStack2 = keras.layers.Reshape((7, 7, img_channels))(blockStack)
             blockStack2._keras_shape = (bins, 7, 7, img_channels)
 
-            print('features= ', features)
-            print('bs2= ', blockStack2._keras_shape)
             convBlocks = block(features, stage_id, block_id, numerical_name=(block_id > 0 and numerical_names[stage_id]), freeze_bn=freeze_bn)(blockStack2)
             if block_id == 0:
                 img_channels = features * 4;
                 print(img_channels)
-            template_x = K.constant(np.zeros([1, img_size, img_size, features * 4]))
+            template_x = K.variable(np.zeros([b_size, img_size, img_size, features * 4]))
+            #template_x = K.reshape(template_x, shape=(-1, img_size, img_size, features * 4))
             x = keras.layers.Lambda(lambda tmp: sbnet_module.sparse_scatter(
             tmp, indices.bin_counts, indices.active_block_indices,
             template_x, transpose=False, add=False, atomic=False, **blockParams))(convBlocks)
             x = keras.layers.Reshape((img_size, img_size, features * 4))(x)
-            x._keras_shape = (1, img_size, img_size, features * 4)
+            x._keras_shape = (b_size, img_size, img_size, features * 4)
 
         features *= 2
         img_size /= 2
@@ -188,12 +187,12 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, freeze_bn=True
         # Else output each stages features
         return keras.models.Model(inputs=inputs, outputs=outputs, *args, **kwargs)
 
-def ResNet50(inputs, blocks=None, include_top=True, classes=1000, *args, **kwargs):
+def ResNet50(inputs, blocks=None, include_top=True, classes=1000, b_size=1, *args, **kwargs):
     if blocks is None:
         blocks = [3, 4, 6, 3]
     numerical_names = [False, False, False, False]
 
-    return ResNet(inputs, blocks, numerical_names=numerical_names, block=bottleneck_2d, include_top=include_top, classes=classes, *args, **kwargs)
+    return ResNet(inputs, blocks, numerical_names=numerical_names, block=bottleneck_2d, include_top=include_top, classes=classes, b_size=b_size, *args, **kwargs)
 
 def download_imagenet(backbone):
     validate_backbone(backbone)
@@ -222,17 +221,16 @@ def validate_backbone(backbone):
         raise ValueError('Backbone (\'{}\') not in allowed backbones ({}).'.format(backbone, allowed_backbones))
 
 
-def resnet_retinanet(num_classes, backbone='resnet50', inputs=None, modifier=None, **kwargs):
+def resnet_retinanet(num_classes, backbone='resnet50', inputs=None, modifier=None, b_size=1, **kwargs):
     validate_backbone(backbone)
 
     # choose default input
     if inputs is None:
-        #inputs = keras.layers.Input(shape=(None, None, 3))
-        inputs = keras.layers.Input(batch_shape=(1, 224, 224, 3))
+        inputs = keras.layers.Input(batch_shape=(b_size, 224, 224, 3))
 
     # create the resnet backbone
     if backbone == 'resnet50':
-        resnet = ResNet50(inputs, include_top=False, freeze_bn=True)
+        resnet = ResNet50(inputs, include_top=False, freeze_bn=True, b_size=b_size)
     elif backbone == 'resnet101':
         resnet = keras_resnet.models.ResNet101(inputs, include_top=False, freeze_bn=True)
     elif backbone == 'resnet152':
