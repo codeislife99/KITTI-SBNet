@@ -1,4 +1,5 @@
 /data/preprocessing/
+/keras-retinanet/logs/*
 *.pyc
 .DS_Store
 .idea/
