@@ -1,4 +1,3 @@
 /data/preprocessing/
-/keras-retinanet/logs/*
 .DS_Store
 .idea/
