@@ -57,22 +57,14 @@ def model_with_weights(model, weights, skip_mismatch):
     return model
 
 
-<<<<<<< HEAD
 def create_models(backbone_retinanet, backbone, num_classes, weights, multi_gpu=0, freeze_backbone=False, batch_size=1):
-=======
-def create_models(backbone_retinanet, backbone, num_classes, weights, multi_gpu=0, freeze_backbone=False):
->>>>>>> b93b93e918d603621e1c2e0a2929a5baf0de0fb2
     modifier = freeze_model if freeze_backbone else None
 
     # Keras recommends initialising a multi-gpu model on the CPU to ease weight sharing, and to prevent OOM errors.
     # optionally wrap in a parallel model
     if multi_gpu > 1:
         with tf.device('/cpu:0'):
-<<<<<<< HEAD
             model = model_with_weights(backbone_retinanet(num_classes, backbone=backbone, nms=False, modifier=modifier, b_size=batch_size), weights=weights, skip_mismatch=True)
-=======
-            model = model_with_weights(backbone_retinanet(num_classes, backbone=backbone, nms=False, modifier=modifier), weights=weights, skip_mismatch=True)
->>>>>>> b93b93e918d603621e1c2e0a2929a5baf0de0fb2
         training_model = multi_gpu_model(model, gpus=multi_gpu)
 
         # append NMS for prediction only
@@ -82,11 +74,7 @@ def create_models(backbone_retinanet, backbone, num_classes, weights, multi_gpu=
         detections       = layers.NonMaximumSuppression(name='nms')([boxes, classification, detections])
         prediction_model = keras.models.Model(inputs=model.inputs, outputs=model.outputs[:2] + [detections])
     else:
-<<<<<<< HEAD
         model            = model_with_weights(backbone_retinanet(num_classes, backbone=backbone, nms=True, modifier=modifier, b_size=batch_size), weights=weights, skip_mismatch=True)
-=======
-        model            = model_with_weights(backbone_retinanet(num_classes, backbone=backbone, nms=True, modifier=modifier), weights=weights, skip_mismatch=True)
->>>>>>> b93b93e918d603621e1c2e0a2929a5baf0de0fb2
         training_model   = model
         prediction_model = model
 
@@ -384,12 +372,8 @@ def main(args=None):
             num_classes=train_generator.num_classes(),
             weights=weights,
             multi_gpu=args.multi_gpu,
-<<<<<<< HEAD
             freeze_backbone=args.freeze_backbone,
             batch_size=args.batch_size
-=======
-            freeze_backbone=args.freeze_backbone
->>>>>>> b93b93e918d603621e1c2e0a2929a5baf0de0fb2
         )
 
     # print model summary
