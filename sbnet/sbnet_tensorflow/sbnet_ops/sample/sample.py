@@ -72,12 +72,12 @@ indices = sbnet_module.reduce_mask(mask, blockCount, tol=0.5, **inBlockParams)
 #print(sess.run(indices.bin_counts))
 
 # stack active overlapping tiles to batch dimension
-print(sess.run(tf.shape(x)))
+#print(sess.run(tf.shape(x)))
 blockStack = sbnet_module.sparse_gather(
     x, indices.bin_counts, indices.active_block_indices, transpose=False, **inBlockParams)
-print(sess.run(indices.bin_counts))
-print(blockCount)
-print(sess.run(tf.shape(blockStack)))
+#print(sess.run(indices.bin_counts))
+#print(blockCount)
+#print(sess.run(tf.shape(blockStack)))
 
 # perform dense convolution on a sparse stack of tiles
 convBlocks = tf.nn.conv2d(
