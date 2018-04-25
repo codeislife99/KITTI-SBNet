@@ -71,7 +71,7 @@ from tf_conv_dims import calc_padding_4d, calc_out_size_4d, calc_out_size_4d_np
 
 log = logger.get()
 
-sbnet_module = tf.load_op_library('../../sbnet/sbnet_tensorflow/sbnet_ops/libsbnet.so')
+sbnet_module = tf.load_op_library('/home/allanwan/Classes/16824/proj/KITTI-SBNet/sbnet/sbnet_tensorflow/sbnet_ops/libsbnet.so')
 
 BlockParams = namedtuple('BlockParams', ['bsize', 'bsize_out', 'boffset', 'bcount', 'bstrides'])
 

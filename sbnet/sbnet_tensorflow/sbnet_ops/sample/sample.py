@@ -55,6 +55,7 @@ sparseMask = np.greater(mask, threshold).astype(np.float32)
 
 # upsample the mask to full resolution
 upsampledMask = sparseMask.repeat(blockStride[0], axis=1).repeat(blockStride[1], axis=2)
+mask = upsampledMask
 
 # create a random input tensor
 x = tf.constant( np.random.randn(batch, hw, hw, channels).astype(np.float32) )
@@ -68,11 +69,13 @@ indices = sbnet_module.reduce_mask(mask, blockCount, tol=0.5, **inBlockParams)
 #    channel_slice = x[ni, 14*hi : 14*hi+16, 14*wi : 14*wi+16, :]
 #    blockStack[ni, :, :, :] = channel_slice
 #print(sess.run(indices.active_block_indices))
-#print(sess.run(tf.shape(indices.active_block_indices)))
+#print(sess.run(indices.active_block_indices))
 #print(sess.run(indices.bin_counts))
 
 # stack active overlapping tiles to batch dimension
 #print(sess.run(tf.shape(x)))
+#print(x)
+#print(np.shape(mask))
 blockStack = sbnet_module.sparse_gather(
     x, indices.bin_counts, indices.active_block_indices, transpose=False, **inBlockParams)
 #print(sess.run(indices.bin_counts))
@@ -81,7 +84,7 @@ blockStack = sbnet_module.sparse_gather(
 
 # perform dense convolution on a sparse stack of tiles
 convBlocks = tf.nn.conv2d(
-    blockStack, w, strides=[1, 1, 1, 1], padding='VALID')
+    tf.reshape(blockStack, [-1, 20, 20, 64]), [3, 3, 64, 64], strides=[1, 1, 1, 1], padding='VALID')
 
 # write/scatter the tiles back on top of original tensor
 # note that the output tensor is reduced by 1 on each side due to 'VALID' convolution
