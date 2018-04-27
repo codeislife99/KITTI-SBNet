@@ -175,7 +175,7 @@ class RpnModel(model.DetectionModel):
                                    self._bev_pixel_size[0] + 4, 
                                    self._bev_pixel_size[1], 
                                    self._bev_depth).astype(np.float32)
-            threshold = np.percentile(mask, 90)
+            threshold = np.percentile(mask, 0)
             mask = np.greater(mask, threshold).astype(np.float32)
 
             block_params = sparse_conv_lib.calc_block_params(
