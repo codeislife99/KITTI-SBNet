@@ -58,7 +58,7 @@ class KittiDataset:
 
         # Determines the network mode. This is initialized to 'train' but
         # is overwritten inside the model based on the mode.
-        self.train_val_test = 'train'
+        self.train_val_test = 'trainval'
         # Determines if training includes all samples, including the ones
         # without anchor_info. This is initialized to False, but is overwritten
         # via the config inside the model.
@@ -115,7 +115,9 @@ class KittiDataset:
         # 0: []
         # 1: ['flip'], ['pca_jitter']
         # 2: ['flip', 'pca_jitter']
-        for aug_idx in range(len(self.aug_list) + 1):
+        
+        #for aug_idx in range(len(self.aug_list) + 1):
+        for aug_idx in range(len(self.aug_list)):
             # Get all combinations
             augmentations = list(itertools.combinations(self.aug_list,
                                                         aug_idx))
@@ -221,6 +223,7 @@ class KittiDataset:
             the .txt file corresponding to the data split
         """
         set_file = self.dataset_dir + '/' + data_split + '.txt'
+        print(set_file)
         with open(set_file, 'r') as f:
             sample_names = f.read().splitlines()
 

@@ -46,6 +46,7 @@ _KITTIDATASETCONFIG = _descriptor.Descriptor(
       name='dataset_dir', full_name='avod.protos.KittiDatasetConfig.dataset_dir', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=True, default_value=_b("~/Kitti/object").decode('utf-8'),
+      #has_default_value=True, default_value=_b("/media/allanwan/UNTITLED/kitti/object").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),

@@ -118,6 +118,7 @@ def main(dataset=None):
     if process_car:
         car_dataset = DatasetBuilder.load_dataset_from_config(
             car_dataset_config_path)
+        print(car_dataset.num_samples)
     if process_ped:
         ped_dataset = DatasetBuilder.load_dataset_from_config(
             ped_dataset_config_path)
