@@ -6,6 +6,7 @@ import os
 
 import numpy as np
 import cv2
+import pickle
 
 from wavedata.tools.core import calib_utils
 from wavedata.tools.obj_detection import obj_utils
@@ -349,6 +350,8 @@ class KittiDataset:
             height_maps = np.transpose(height_maps, (1, 2, 0))
             density_map = np.transpose(density_map, (1, 2, 0))
             bev_input = np.dstack((height_maps, density_map))
+            #np.save('~/Classes/16824/proj/KITTI-SBNet/avod/bev_samples/' + str(sample_idx) + '.npy', bev_input)
+            #pickle.dump(bev_input, open('/home/allanwan/Classes/16824/proj/KITTI-SBNet/avod/bev_samples/' + str(sample_idx) + '.p', 'wb'))
 
             sample_dict = {
                 constants.KEY_LABEL_BOXES_3D: label_boxes_3d,

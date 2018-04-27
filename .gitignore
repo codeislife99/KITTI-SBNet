@@ -1,6 +1,7 @@
 /data/preprocessing/
 /keras-retinanet/logs/*
 /avod/avod/data/outputs/*
+/avod/bev_samples/*
 *.pyc
 .DS_Store
 .idea/
