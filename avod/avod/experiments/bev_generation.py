@@ -24,9 +24,11 @@ def bev_gen(model_config, train_config, dataset_config):
 
     dataset = DatasetBuilder.build_kitti_dataset(dataset_config,
                                                  use_defaults=False)
-    dataset.train_val_test = 'trainval'
+    dataset.train_val_test = 'train'
     dataset.train_on_all_samples = True
     num_data = dataset.num_samples
+    #print(len(dataset.load_sample_names('train')))
+    """
     for i in range(num_data):
         outputs = dataset.next_batch(1, shuffle=False)
         output_bundle = outputs[0]
@@ -43,6 +45,7 @@ def bev_gen(model_config, train_config, dataset_config):
     label = output_bundle['label_boxes_3d']
     print(H)
     print(label)
+    """
     return
 
 
@@ -52,7 +55,7 @@ def main(_):
     # Defaults
     default_pipeline_config_path = avod.root_dir() + \
         '/configs/avod_cars_example.config'
-    default_data_split = 'trainval'
+    default_data_split = 'train'
     default_device = '0'
 
     parser.add_argument('--pipeline_config',

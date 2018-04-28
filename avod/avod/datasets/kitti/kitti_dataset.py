@@ -58,7 +58,7 @@ class KittiDataset:
 
         # Determines the network mode. This is initialized to 'train' but
         # is overwritten inside the model based on the mode.
-        self.train_val_test = 'trainval'
+        self.train_val_test = 'train'
         # Determines if training includes all samples, including the ones
         # without anchor_info. This is initialized to False, but is overwritten
         # via the config inside the model.

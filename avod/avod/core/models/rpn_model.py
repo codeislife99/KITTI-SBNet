@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import torch
 from tensorflow.contrib import slim
 
 from avod.builders import feature_extractor_builder
@@ -17,6 +18,9 @@ from avod.datasets.kitti import kitti_aug
 import sys
 sys.path.insert(0, '../sbnet/sbnet_tensorflow/benchmark')
 import sparse_conv_lib
+sys.path.insert(0, '../U_Net_6_channels')
+from networks import unet
+import api_AVOD
 
 class RpnModel(model.DetectionModel):
     ##############################
@@ -83,6 +87,7 @@ class RpnModel(model.DetectionModel):
         self._train_val_test = train_val_test
 
         self._is_training = (self._train_val_test == 'train')
+	self._U_Net_model = torch.load('../U_Net_6_channels/model_epoch_170.pt')
 
         # Input config
         input_config = self._config.input_config
@@ -710,8 +715,9 @@ class RpnModel(model.DetectionModel):
         bev_input = sample.get(constants.KEY_BEV_INPUT)
         
         # TODO: get the mask here!!!
-        mask_shape = np.shape(bev_input)
-        mask = np.zeros((1, mask_shape[0] + 4, mask_shape[1], mask_shape[2])).astype(np.float32) + 1
+        mask = api_AVOD.get_mask(np.expand_dims(bev_input, axis=0), self._U_Net_model)
+        #mask_shape = np.shape(bev_input)
+        #mask = np.zeros((1, mask_shape[0] + 4, mask_shape[1], mask_shape[2])).astype(np.float32) + 1
         #mask = np.random.randn((1, mask_shape[1] + 4, mask_shape[2], mask_shape[3])).astype(np.float32) + 1
         #threshold = np.percentile(mask, 0)
         #mask = np.greater(mask, threshold).astype(np.float32)
