@@ -4,10 +4,11 @@ import os
 from torch.autograd import Variable
 import numpy as np
 import cv2
-from networks import unet
+# from networks import unet
 from sys import argv
+import time
 
-def get_mask(input_tensor,output_size = (800,704)):
+def get_mask(input_tensor,model_unet,output_size = (800,704)):
 	# checkpoints_directory_unet="checkpoints_unet"
 
 	# python api.py /path/to/image/imagename.extension 
@@ -15,10 +16,12 @@ def get_mask(input_tensor,output_size = (800,704)):
 
 	# checkpoints_unet= os.listdir(checkpoints_directory_unet)
 	# checkpoints_unet.sort(key=lambda x:int((x.split('_')[2]).split('.')[0]))
-	model_unet = torch.load('model_epoch_170.pt')
+	# start_time = time.time()
 	model_unet.eval()
+	# model_unet.cuda()
 	if torch.cuda.is_available(): #use gpu if available
-	    model_unet.cuda() 
+		model_unet.cuda() 
+	# print(time.time()-start_time)
 
 	# image1 = cv2.imread(img_path1)
 	# orig_width,orig_height=image1.shape[0],image1.shape[1]
@@ -38,7 +41,7 @@ def get_mask(input_tensor,output_size = (800,704)):
 	input_unet1=input_unet1.type(torch.FloatTensor)
 
 	if torch.cuda.is_available(): #use gpu if available
-	    input_unet1 = Variable(input_unet1.cuda()) 
+	    input_unet1 = Variable(input_unet1.cuda(),volatile = True) 
 	else:
 		input_unet1 = Variable(input_unet1, volatile = True)
 
@@ -91,5 +94,9 @@ def get_mask(input_tensor,output_size = (800,704)):
 	# cv2.imwrite("Output_unet_2.png", im_bw)
 if __name__ == '__main__':
 	input_tensor = np.zeros((1,700,800,6))
-	output = get_mask(input_tensor)
-	print(output.shape)
+	model_unet = torch.load('model_epoch_170.pt')
+
+	start_time = time.time()
+	output = get_mask(input_tensor,model_unet)
+	# print(time.time()-start_time)
+	# print(output.shape)
