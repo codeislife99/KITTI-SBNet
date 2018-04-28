@@ -2,6 +2,7 @@
 /keras-retinanet/logs/*
 /avod/avod/data/*
 /avod/bev_samples/*
+/avod/bev_samples_train/*
 *.pyc
 *.tar
 .DS_Store

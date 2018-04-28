@@ -171,12 +171,10 @@ class RpnModel(model.DetectionModel):
                     self._bev_input_batches, self._bev_pixel_size)
 
             # TODO: get the mask from the preprocessed bev
-            mask = np.random.randn(1, 
-                                   self._bev_pixel_size[0] + 4, 
-                                   self._bev_pixel_size[1], 
-                                   self._bev_depth).astype(np.float32)
-            threshold = np.percentile(mask, 0)
-            mask = np.greater(mask, threshold).astype(np.float32)
+            self._mask = self._add_placeholder(tf.float32, (1, 
+ 						  self._bev_pixel_size[0] + 4, 
+						  self._bev_pixel_size[1], 
+						  self._bev_depth), 'mask')
 
             block_params = sparse_conv_lib.calc_block_params(
                                 [1, int(self._bev_pixel_size[0]), int(self._bev_pixel_size[1]), 
@@ -190,7 +188,7 @@ class RpnModel(model.DetectionModel):
             base_bsize = block_params.bsize
             base_boffset = block_params.boffset
             base_bstride = block_params.bstrides
-            self._mask_dict = {'mask': mask,
+            self._mask_dict = {'mask': self._mask,
                                'bcounts': base_bcounts,
                                'bsize': base_bsize,
                                'boffset': base_boffset,
@@ -390,7 +388,6 @@ class RpnModel(model.DetectionModel):
             else:
                 raise ValueError('Invalid fusion method', self._fusion_method)
 
-        # TODO: move this section into an separate AnchorPredictor class
         with tf.variable_scope('anchor_predictor', 'ap', [rpn_fusion_out]):
             tensor_in = rpn_fusion_out
 
@@ -711,6 +708,13 @@ class RpnModel(model.DetectionModel):
         # Network input data
         image_input = sample.get(constants.KEY_IMAGE_INPUT)
         bev_input = sample.get(constants.KEY_BEV_INPUT)
+        
+        # TODO: get the mask here!!!
+        mask_shape = np.shape(bev_input)
+        mask = np.zeros((1, mask_shape[0] + 4, mask_shape[1], mask_shape[2])).astype(np.float32) + 1
+        #mask = np.random.randn((1, mask_shape[1] + 4, mask_shape[2], mask_shape[3])).astype(np.float32) + 1
+        #threshold = np.percentile(mask, 0)
+        #mask = np.greater(mask, threshold).astype(np.float32)
 
         # Image shape (h, w)
         image_shape = [image_input.shape[0], image_input.shape[1]]
@@ -732,6 +736,7 @@ class RpnModel(model.DetectionModel):
         # Fill in the rest
         self._placeholder_inputs[self.PL_BEV_INPUT] = bev_input
         self._placeholder_inputs[self.PL_IMG_INPUT] = image_input
+        self._placeholder_inputs['mask'] = mask
 
         self._placeholder_inputs[self.PL_LABEL_ANCHORS] = label_anchors
         self._placeholder_inputs[self.PL_LABEL_BOXES_3D] = label_boxes_3d

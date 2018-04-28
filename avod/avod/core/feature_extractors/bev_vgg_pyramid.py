@@ -55,6 +55,7 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
         base_bsize = mask_dict['bsize']
         base_boffset = mask_dict['boffset']
         base_bstride = mask_dict['bstride']
+        tol_threshold = 0.1
 
         num_channels = np.shape(mask)[-1]
         masks_list = [mask]
@@ -78,7 +79,7 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
             bstride[1] = bstride[1] // 2
             bstride_list.append(bstride)
             
-            mask = copy.deepcopy(mask)
+            mask = tf.identity(mask)
             mask = mask[:, ::2, ::2, :]
             masks_list.append(mask)
 
@@ -93,6 +94,7 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
 
                     # Pad 700 to 704 to allow even divisions for max pooling
                     padded = tf.pad(inputs, [[0, 0], [4, 0], [0, 0], [0, 0]])
+                    input_pixel_size[0] = input_pixel_size[0] + 4
 
                     # Encoder
                     mask = masks_list[0]
@@ -104,7 +106,7 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
 			bsize=_bsize,
 			boffset=_boffset,
 			bstride=_bstride,
-			tol=0.5, # pooling threshold to consider a block as active
+			tol=tol_threshold, # pooling threshold to consider a block as active
 			avgpool=True) # max pooling by default
 
                     """
@@ -134,11 +136,11 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
                                         normalizer_params={
                                             'is_training': is_training},
                                         scope='conv1')
-                    mask_shape = np.shape(mask)
                     num_channels = vgg_config.vgg_conv1[1]
-                    canvas = tf.convert_to_tensor(
-                                 np.zeros((1, mask_shape[1], mask_shape[2], num_channels), 
-                                           dtype=np.float32))
+                    canvas = tf.Variable(tf.constant(0.0, shape=[1, 
+								input_pixel_size[0],
+								input_pixel_size[1],
+								num_channels]))
                     conv1 = sbnet_module.sparse_scatter(
 					operation_output,
 					indices.bin_counts,
@@ -150,14 +152,18 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
 					add=False,
 					atomic=False, # use atomic or regular adds
 					transpose=False)
-                    conv1 = tf.reshape(conv1, [1, mask_shape[1], mask_shape[2], num_channels])
+                    conv1 = tf.reshape(conv1, [1, 
+					       input_pixel_size[0], 
+					       input_pixel_size[1], 
+					       num_channels])
                     pool1 = slim.max_pool2d(conv1, [2, 2], scope='pool1')
 
                     #===============================================================
 
                     mask = masks_list[1]
-                    mask = np.repeat(np.transpose(np.array([mask[:,:,:,0]]), (1, 2, 3, 0)), 
-                                     num_channels, axis=3)
+                    mask = tf.tile(tf.expand_dims(mask[:, :, :, 0], 3), [1, 1, 1, num_channels])
+                    input_pixel_size[0] = input_pixel_size[0] // 2
+                    input_pixel_size[1] = input_pixel_size[1] // 2
                     _bsize = bsize_list[1]
                     _boffset = boffset_list[1]
                     _bstride = bstride_list[1]
@@ -166,7 +172,7 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
 			bsize=_bsize,
 			boffset=_boffset,
 			bstride=_bstride,
-			tol=0.5, # pooling threshold to consider a block as active
+			tol=tol_threshold, # pooling threshold to consider a block as active
 			avgpool=True) # max pooling by default
                     block_stack = sbnet_module.sparse_gather(
 					pool1,
@@ -186,11 +192,11 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
                                         normalizer_params={
                                             'is_training': is_training},
                                         scope='conv2')
-                    mask_shape = np.shape(mask)
                     num_channels = vgg_config.vgg_conv2[1]
-                    canvas = tf.convert_to_tensor(
-                                 np.zeros((1, mask_shape[1], mask_shape[2], num_channels), 
-                                           dtype=np.float32))
+                    canvas = tf.Variable(tf.constant(0.0, shape=[1, 
+								input_pixel_size[0],
+								input_pixel_size[1],
+								num_channels]))
                     conv2 = sbnet_module.sparse_scatter(
 					operation_output,
 					indices.bin_counts,
@@ -202,14 +208,18 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
 					add=False,
 					atomic=False, # use atomic or regular adds
 					transpose=False)
-                    conv2 = tf.reshape(conv2, [1, mask_shape[1], mask_shape[2], num_channels])
+                    conv2 = tf.reshape(conv2, [1, 
+					       input_pixel_size[0], 
+					       input_pixel_size[1], 
+					       num_channels])
                     pool2 = slim.max_pool2d(conv2, [2, 2], scope='pool2')
 
                     #===============================================================
 
                     mask = masks_list[2]
-                    mask = np.repeat(np.transpose(np.array([mask[:,:,:,0]]), (1, 2, 3, 0)), 
-                                     num_channels, axis=3)
+                    mask = tf.tile(tf.expand_dims(mask[:, :, :, 0], 3), [1, 1, 1, num_channels])
+                    input_pixel_size[0] = input_pixel_size[0] // 2
+                    input_pixel_size[1] = input_pixel_size[1] // 2
                     _bsize = bsize_list[2]
                     _boffset = boffset_list[2]
                     _bstride = bstride_list[2]
@@ -218,7 +228,7 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
 			bsize=_bsize,
 			boffset=_boffset,
 			bstride=_bstride,
-			tol=0.5, # pooling threshold to consider a block as active
+			tol=tol_threshold, # pooling threshold to consider a block as active
 			avgpool=True) # max pooling by default
                     block_stack = sbnet_module.sparse_gather(
 					pool2,
@@ -238,11 +248,11 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
                                         normalizer_params={
                                             'is_training': is_training},
                                         scope='conv3')
-                    mask_shape = np.shape(mask)
                     num_channels = vgg_config.vgg_conv3[1]
-                    canvas = tf.convert_to_tensor(
-                                 np.zeros((1, mask_shape[1], mask_shape[2], num_channels), 
-                                           dtype=np.float32))
+                    canvas = tf.Variable(tf.constant(0.0, shape=[1, 
+								input_pixel_size[0],
+								input_pixel_size[1],
+								num_channels]))
                     conv3 = sbnet_module.sparse_scatter(
 					operation_output,
 					indices.bin_counts,
@@ -254,14 +264,18 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
 					add=False,
 					atomic=False, # use atomic or regular adds
 					transpose=False)
-                    conv3 = tf.reshape(conv3, [1, mask_shape[1], mask_shape[2], num_channels])
+                    conv3 = tf.reshape(conv3, [1, 
+					       input_pixel_size[0], 
+					       input_pixel_size[1], 
+					       num_channels])
                     pool3 = slim.max_pool2d(conv3, [2, 2], scope='pool3')
 
                     #===============================================================
 
                     mask = masks_list[3]
-                    mask = np.repeat(np.transpose(np.array([mask[:,:,:,0]]), (1, 2, 3, 0)), 
-                                     num_channels, axis=3)
+                    mask = tf.tile(tf.expand_dims(mask[:, :, :, 0], 3), [1, 1, 1, num_channels])
+                    input_pixel_size[0] = input_pixel_size[0] // 2
+                    input_pixel_size[1] = input_pixel_size[1] // 2
                     _bsize = bsize_list[3]
                     _boffset = boffset_list[3]
                     _bstride = bstride_list[3]
@@ -270,7 +284,7 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
 			bsize=_bsize,
 			boffset=_boffset,
 			bstride=_bstride,
-			tol=0.5, # pooling threshold to consider a block as active
+			tol=tol_threshold, # pooling threshold to consider a block as active
 			avgpool=True) # max pooling by default
                     block_stack = sbnet_module.sparse_gather(
 					pool3,
@@ -290,11 +304,11 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
                                         normalizer_params={
                                             'is_training': is_training},
                                         scope='conv4')
-                    mask_shape = np.shape(mask)
                     num_channels = vgg_config.vgg_conv4[1]
-                    canvas = tf.convert_to_tensor(
-                                 np.zeros((1, mask_shape[1], mask_shape[2], num_channels), 
-                                           dtype=np.float32))
+                    canvas = tf.Variable(tf.constant(0.0, shape=[1, 
+								input_pixel_size[0],
+								input_pixel_size[1],
+								num_channels]))
                     conv4 = sbnet_module.sparse_scatter(
 					operation_output,
 					indices.bin_counts,
@@ -306,7 +320,10 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
 					add=False,
 					atomic=False, # use atomic or regular adds
 					transpose=False)
-                    conv4 = tf.reshape(conv4, [1, mask_shape[1], mask_shape[2], num_channels])
+                    conv4 = tf.reshape(conv4, [1, 
+					       input_pixel_size[0], 
+					       input_pixel_size[1], 
+					       num_channels])
 
                     # Decoder (upsample and fuse features)
                     upconv3 = slim.conv2d_transpose(
