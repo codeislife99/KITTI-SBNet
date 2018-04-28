@@ -7,7 +7,7 @@ import cv2
 from networks import unet
 from sys import argv
 
-def get_mask(input_tensor,output_size = (704,800)):
+def get_mask(input_tensor,output_size = (800,704)):
 	# checkpoints_directory_unet="checkpoints_unet"
 
 	# python api.py /path/to/image/imagename.extension 
@@ -84,8 +84,12 @@ def get_mask(input_tensor,output_size = (704,800)):
 	# im_bw = cv2.threshold(out_unet, thresh, 255, cv2.THRESH_BINARY)[1]
 	# out_unet = out_unet.astype('uint8')
 	# im_bw = cv2.adaptiveThreshold(out_unet,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,2)
-	return out_unet
+	# y = np.expand_dims(a,axis = 0) 
+	# y = np.expand_dims(y,axis = -1) 
+	# y = np.repeat(y,6,axis =3)
+	return np.repeat(np.expand_dims(np.expand_dims(out_unet,axis = 0),axis = -1),6,axis = 3)
 	# cv2.imwrite("Output_unet_2.png", im_bw)
 if __name__ == '__main__':
 	input_tensor = np.zeros((1,700,800,6))
 	output = get_mask(input_tensor)
+	print(output.shape)
