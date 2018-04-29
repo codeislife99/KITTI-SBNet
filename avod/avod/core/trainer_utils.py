@@ -7,12 +7,17 @@ slim = tf.contrib.slim
 def load_checkpoints(checkpoint_dir, saver):
 
     # Load latest checkpoint if available
+
     all_checkpoint_states = tf.train.get_checkpoint_state(
         checkpoint_dir)
     if all_checkpoint_states is not None:
         all_checkpoint_paths = \
             all_checkpoint_states.all_model_checkpoint_paths
         # Save the checkpoint list into saver.last_checkpoints
+        for i, ckpt in enumerate(all_checkpoint_paths):
+            ckpt_split = ckpt.split('/')
+            all_checkpoint_paths[i] = checkpoint_dir + '/' + ckpt_split[-1]
+            
         saver.recover_last_checkpoints(all_checkpoint_paths)
     else:
         print('No checkpoints found')

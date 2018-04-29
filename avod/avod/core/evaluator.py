@@ -67,7 +67,8 @@ class Evaluator:
         self.full_model = isinstance(self.model, AvodModel)
 
         self.paths_config = self.model_config.paths_config
-        self.checkpoint_dir = self.paths_config.checkpoint_dir
+        #self.checkpoint_dir = self.paths_config.checkpoint_dir
+        self.checkpoint_dir = '/home/allanwan/Classes/16824/proj/KITTI-SBNet/avod/avod/data/outputs/pyramid_cars_example_0_1/checkpoints'
 
         self.skip_evaluated_checkpoints = skip_evaluated_checkpoints
         self.eval_wait_interval = eval_wait_interval

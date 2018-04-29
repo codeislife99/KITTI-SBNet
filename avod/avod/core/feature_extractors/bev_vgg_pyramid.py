@@ -55,7 +55,7 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
         base_bsize = mask_dict['bsize']
         base_boffset = mask_dict['boffset']
         base_bstride = mask_dict['bstride']
-        tol_threshold = 0.1
+        tol_threshold = 0.4
 
         num_channels = np.shape(mask)[-1]
         masks_list = [mask]

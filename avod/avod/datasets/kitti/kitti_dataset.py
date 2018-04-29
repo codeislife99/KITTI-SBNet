@@ -116,8 +116,8 @@ class KittiDataset:
         # 1: ['flip'], ['pca_jitter']
         # 2: ['flip', 'pca_jitter']
         
-        #for aug_idx in range(len(self.aug_list) + 1):
-        for aug_idx in range(len(self.aug_list)):
+        for aug_idx in range(len(self.aug_list) + 1):
+        #for aug_idx in range(len(self.aug_list)):
             # Get all combinations
             augmentations = list(itertools.combinations(self.aug_list,
                                                         aug_idx))

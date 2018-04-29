@@ -25,6 +25,7 @@ def train(model_config, train_config, dataset_config):
 
     train_val_test = 'train'
     model_name = model_config.model_name
+    print(dataset.num_samples)
 
     with tf.Graph().as_default():
         if model_name == 'rpn_model':
