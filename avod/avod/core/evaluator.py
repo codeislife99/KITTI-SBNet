@@ -67,8 +67,8 @@ class Evaluator:
         self.full_model = isinstance(self.model, AvodModel)
 
         self.paths_config = self.model_config.paths_config
-        #self.checkpoint_dir = self.paths_config.checkpoint_dir
-        self.checkpoint_dir = '/home/allanwan/Classes/16824/proj/KITTI-SBNet/avod/avod/data/outputs/pyramid_cars_example_0_1/checkpoints'
+        self.checkpoint_dir = self.paths_config.checkpoint_dir
+        #self.checkpoint_dir = '/home/allanwan/Classes/16824/proj/KITTI-SBNet/avod/avod/data/outputs/pyramid_cars_example_0_1/checkpoints'
 
         self.skip_evaluated_checkpoints = skip_evaluated_checkpoints
         self.eval_wait_interval = eval_wait_interval
@@ -81,7 +81,7 @@ class Evaluator:
 
         eval_mode = eval_config.eval_mode
         if eval_mode not in ['val', 'test']:
-            raise ValueError('Evaluation mode can only be set to `val`'
+           raise ValueError('Evaluation mode can only be set to `val`'
                              'or `test`')
 
         if not os.path.exists(self.checkpoint_dir):
@@ -89,7 +89,7 @@ class Evaluator:
                              .format(self.checkpoint_dir))
 
         if self.do_kitti_native_eval:
-            if self.eval_config.eval_mode == 'val':
+            if (self.eval_config.eval_mode == 'val'):
                 # Copy kitti native eval code into the predictions folder
                 print(self.model_config.checkpoint_name)
                 evaluator_utils.copy_kitti_native_code(
@@ -106,7 +106,7 @@ class Evaluator:
 
         # The model should return a dictionary of predictions
         self._prediction_dict = self.model.build()
-        if eval_mode == 'val':
+        if (eval_mode == 'val'):
             # Setup loss and summary writer in val mode only
             self._loss_dict, self._total_loss = \
                 self.model.loss(self._prediction_dict)

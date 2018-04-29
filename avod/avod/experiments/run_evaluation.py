@@ -20,8 +20,8 @@ def evaluate(model_config, eval_config, dataset_config):
 
     # Parse eval config
     eval_mode = eval_config.eval_mode
-    if eval_mode not in ['val', 'test']:
-        raise ValueError('Evaluation mode can only be set to `val` or `test`')
+    #if eval_mode not in ['val', 'test']:
+    #    raise ValueError('Evaluation mode can only be set to `val` or `test`')
     evaluate_repeatedly = eval_config.evaluate_repeatedly
 
     # Parse dataset config
