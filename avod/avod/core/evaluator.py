@@ -91,6 +91,7 @@ class Evaluator:
         if self.do_kitti_native_eval:
             if self.eval_config.eval_mode == 'val':
                 # Copy kitti native eval code into the predictions folder
+                print(self.model_config.checkpoint_name)
                 evaluator_utils.copy_kitti_native_code(
                     self.model_config.checkpoint_name)
 
@@ -709,7 +710,7 @@ class Evaluator:
 
         # Append to end of file
         avg_loss_file_path = predictions_base_dir + '/rpn_avg_losses.csv'
-        with open(avg_loss_file_path, 'ba') as fp:
+        with open(avg_loss_file_path, 'ab') as fp:
             np.savetxt(fp,
                        np.reshape([global_step,
                                    avg_rpn_obj_loss,
@@ -719,7 +720,7 @@ class Evaluator:
                        fmt='%d, %.5f, %.5f, %.5f')
 
         avg_acc_file_path = predictions_base_dir + '/rpn_avg_obj_acc.csv'
-        with open(avg_acc_file_path, 'ba') as fp:
+        with open(avg_acc_file_path, 'ab') as fp:
             np.savetxt(
                 fp, np.reshape(
                     [global_step, avg_rpn_obj_accuracy],
@@ -826,7 +827,7 @@ class Evaluator:
         # Append to end of file
         avg_loss_file_path = predictions_base_dir + '/avod_avg_losses.csv'
         if box_rep in ['box_3d', 'box_4ca']:
-            with open(avg_loss_file_path, 'ba') as fp:
+            with open(avg_loss_file_path, 'ab') as fp:
                 np.savetxt(fp,
                            [np.hstack(
                             [global_step,
@@ -840,7 +841,7 @@ class Evaluator:
                             )],
                            fmt='%d, %.5f, %.5f, %.5f, %.5f, %.5f')
         elif box_rep in ['box_8c', 'box_8co', 'box_4c']:
-            with open(avg_loss_file_path, 'ba') as fp:
+            with open(avg_loss_file_path, 'ab') as fp:
                 np.savetxt(fp,
                            [np.hstack(
                             [global_step,
@@ -856,7 +857,7 @@ class Evaluator:
             raise NotImplementedError('Saving losses not implemented')
 
         avg_acc_file_path = predictions_base_dir + '/avod_avg_cls_acc.csv'
-        with open(avg_acc_file_path, 'ba') as fp:
+        with open(avg_acc_file_path, 'ab') as fp:
             np.savetxt(
                 fp, np.reshape(
                     [global_step, avg_avod_cls_accuracy],
