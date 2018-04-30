@@ -223,21 +223,30 @@ class Evaluator:
 
             # Do predictions, loss calculations, and summaries
             if validation:
+                inference_start_time = time.time()
+                # Don't calculate loss or run summaries for test
+                _ = self._sess.run(self._prediction_dict['bev_features'],
+                                             feed_dict=feed_dict)
+                inference_time = time.time() - inference_start_time
+                predictions = self._sess.run(self._prediction_dict,
+                                             feed_dict=feed_dict)
+
+                # Add times to list
+                total_feed_dict_time.append(feed_dict_time)
+                total_inference_time.append(inference_time)
                 if self.summary_merged is not None:
-                    predictions, eval_losses, eval_total_loss, summary_out = \
-                        self._sess.run([self._prediction_dict,
-                                        self._loss_dict,
+                    eval_losses, eval_total_loss, summary_out = \
+                        self._sess.run([self._loss_dict,
                                         self._total_loss,
                                         self.summary_merged],
-                                       feed_dict=feed_dict)
+                                        feed_dict=feed_dict)
                     self.summary_writer.add_summary(summary_out, global_step)
 
                 else:
-                    predictions, eval_losses, eval_total_loss = \
-                        self._sess.run([self._prediction_dict,
-                                        self._loss_dict,
+                    eval_losses, eval_total_loss = \
+                        self._sess.run([self._loss_dict,
                                         self._total_loss],
-                                       feed_dict=feed_dict)
+                                        feed_dict=feed_dict)
 
                 rpn_objectness_loss = eval_losses[RpnModel.LOSS_RPN_OBJECTNESS]
                 rpn_regression_loss = eval_losses[RpnModel.LOSS_RPN_REGRESSION]
@@ -333,6 +342,8 @@ class Evaluator:
                 # Store predictions in kitti format
                 if self.do_kitti_native_eval:
                     self.run_kitti_native_eval(global_step)
+            evaluator_utils.print_inference_time_statistics(
+                total_feed_dict_time, total_inference_time)
 
         else:
             # Test mode --> train_val_test == 'test'

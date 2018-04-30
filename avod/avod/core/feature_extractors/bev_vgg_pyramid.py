@@ -49,6 +49,7 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
             The last op containing the log predictions and end_points dict.
         """
         vgg_config = self.config
+        use_sbnet = True
 
         mask = mask_dict['mask']
         base_bcounts = mask_dict['bcounts']
@@ -97,37 +98,224 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
                     input_pixel_size[0] = input_pixel_size[0] + 4
 
                     # Encoder
-                    mask = masks_list[0]
-                    _bsize = bsize_list[0]
-                    _boffset = boffset_list[0]
-                    _bstride = bstride_list[0]
-                    indices = sbnet_module.reduce_mask(
-			mask, tf.constant(bcounts, dtype=tf.int32),
-			bsize=_bsize,
-			boffset=_boffset,
-			bstride=_bstride,
-			tol=tol_threshold, # pooling threshold to consider a block as active
-			avgpool=True) # max pooling by default
+                    if use_sbnet == True:
+			    mask = masks_list[0]
+			    _bsize = bsize_list[0]
+			    _boffset = boffset_list[0]
+			    _bstride = bstride_list[0]
+			    indices = sbnet_module.reduce_mask(
+				mask, tf.constant(bcounts, dtype=tf.int32),
+				bsize=_bsize,
+				boffset=_boffset,
+				bstride=_bstride,
+				tol=tol_threshold, # pooling threshold to consider a block as active
+				avgpool=True) # max pooling by default
 
-                    """
-                    gpu_ops = tf.GPUOptions(allow_growth=True)
-                    config = tf.ConfigProto(gpu_options=gpu_ops)
-                    sess = tf.Session(config=config)
-                    sess = tf.Session()
-                    print(sess.run(indices.bin_counts))
-                    print(sess.run(indices.active_block_indices))
-                    """
-                    
-                    block_stack = sbnet_module.sparse_gather(
-					padded,
-					indices.bin_counts,
-					indices.active_block_indices,
-					bsize=_bsize, # block size
-					boffset=_boffset, # block offset
-					bstride=_bstride, # block stride
-					transpose=False)
-                    block_stack = tf.reshape(block_stack, [-1, _bsize[0], _bsize[1], num_channels])
-                    operation_output = slim.repeat(block_stack,
+			    """
+			    gpu_ops = tf.GPUOptions(allow_growth=True)
+			    config = tf.ConfigProto(gpu_options=gpu_ops)
+			    sess = tf.Session(config=config)
+			    sess = tf.Session()
+			    print(sess.run(indices.bin_counts))
+			    print(sess.run(indices.active_block_indices))
+			    """
+			    
+			    block_stack = sbnet_module.sparse_gather(
+						padded,
+						indices.bin_counts,
+						indices.active_block_indices,
+						bsize=_bsize, # block size
+						boffset=_boffset, # block offset
+						bstride=_bstride, # block stride
+						transpose=False)
+			    block_stack = tf.reshape(block_stack, [-1, _bsize[0], _bsize[1], num_channels])
+			    operation_output = slim.repeat(block_stack,
+						vgg_config.vgg_conv1[0],
+						slim.conv2d,
+						vgg_config.vgg_conv1[1],
+						[3, 3],
+						normalizer_fn=slim.batch_norm,
+						normalizer_params={
+						    'is_training': is_training},
+						scope='conv1')
+			    num_channels = vgg_config.vgg_conv1[1]
+			    padded = tf.tile(tf.expand_dims(padded[:, :, :, 0], -1), [1, 1, 1, num_channels])
+			    conv1 = sbnet_module.sparse_scatter(
+						operation_output,
+						indices.bin_counts,
+						indices.active_block_indices,
+						padded, # base tensor to copy to output and overwrite on top of
+						bsize=_bsize,
+						boffset=_boffset,
+						bstride=_bstride,
+						add=False,
+						atomic=False, # use atomic or regular adds
+						transpose=False)
+			    conv1 = tf.reshape(conv1, [1, 
+						       input_pixel_size[0], 
+						       input_pixel_size[1], 
+						       num_channels], name='reshape_conv1')
+			    pool1 = slim.max_pool2d(conv1, [2, 2], scope='pool1')
+
+			    #===============================================================
+
+			    mask = masks_list[1]
+			    mask = tf.tile(tf.expand_dims(mask[:, :, :, 0], 3), [1, 1, 1, num_channels])
+			    input_pixel_size[0] = input_pixel_size[0] // 2
+			    input_pixel_size[1] = input_pixel_size[1] // 2
+			    _bsize = bsize_list[1]
+			    _boffset = boffset_list[1]
+			    _bstride = bstride_list[1]
+			    indices = sbnet_module.reduce_mask(
+				mask, tf.constant(bcounts, dtype=tf.int32),
+				bsize=_bsize,
+				boffset=_boffset,
+				bstride=_bstride,
+				tol=tol_threshold, # pooling threshold to consider a block as active
+				avgpool=True) # max pooling by default
+			    block_stack = sbnet_module.sparse_gather(
+						pool1,
+						indices.bin_counts,
+						indices.active_block_indices,
+						bsize=_bsize, # block size
+						boffset=_boffset, # block offset
+						bstride=_bstride, # block stride
+						transpose=False)
+			    block_stack = tf.reshape(block_stack, [-1, _bsize[0], _bsize[1], num_channels])
+			    operation_output = slim.repeat(block_stack,
+						vgg_config.vgg_conv2[0],
+						slim.conv2d,
+						vgg_config.vgg_conv2[1],
+						[3, 3],
+						normalizer_fn=slim.batch_norm,
+						normalizer_params={
+						    'is_training': is_training},
+						scope='conv2')
+			    num_channels = vgg_config.vgg_conv2[1]
+			    pool1 = tf.tile(tf.expand_dims(pool1[:, :, :, 0], -1), [1, 1, 1, num_channels])
+			    conv2 = sbnet_module.sparse_scatter(
+						operation_output,
+						indices.bin_counts,
+						indices.active_block_indices,
+						pool1, # base tensor to copy to output and overwrite on top of
+						bsize=_bsize,
+						boffset=_boffset,
+						bstride=_bstride,
+						add=False,
+						atomic=False, # use atomic or regular adds
+						transpose=False)
+			    conv2 = tf.reshape(conv2, [1, 
+						       input_pixel_size[0], 
+						       input_pixel_size[1], 
+						       num_channels], name='reshape_conv2')
+			    pool2 = slim.max_pool2d(conv2, [2, 2], scope='pool2')
+
+			    #===============================================================
+
+			    mask = masks_list[2]
+			    mask = tf.tile(tf.expand_dims(mask[:, :, :, 0], 3), [1, 1, 1, num_channels])
+			    input_pixel_size[0] = input_pixel_size[0] // 2
+			    input_pixel_size[1] = input_pixel_size[1] // 2
+			    _bsize = bsize_list[2]
+			    _boffset = boffset_list[2]
+			    _bstride = bstride_list[2]
+			    indices = sbnet_module.reduce_mask(
+				mask, tf.constant(bcounts, dtype=tf.int32),
+				bsize=_bsize,
+				boffset=_boffset,
+				bstride=_bstride,
+				tol=tol_threshold, # pooling threshold to consider a block as active
+				avgpool=True) # max pooling by default
+			    block_stack = sbnet_module.sparse_gather(
+						pool2,
+						indices.bin_counts,
+						indices.active_block_indices,
+						bsize=_bsize, # block size
+						boffset=_boffset, # block offset
+						bstride=_bstride, # block stride
+						transpose=False)
+			    block_stack = tf.reshape(block_stack, [-1, _bsize[0], _bsize[1], num_channels])
+			    operation_output = slim.repeat(block_stack,
+						vgg_config.vgg_conv3[0],
+						slim.conv2d,
+						vgg_config.vgg_conv3[1],
+						[3, 3],
+						normalizer_fn=slim.batch_norm,
+						normalizer_params={
+						    'is_training': is_training},
+						scope='conv3')
+			    num_channels = vgg_config.vgg_conv3[1]
+			    pool2 = tf.tile(tf.expand_dims(pool2[:, :, :, 0], -1), [1, 1, 1, num_channels])
+			    conv3 = sbnet_module.sparse_scatter(
+						operation_output,
+						indices.bin_counts,
+						indices.active_block_indices,
+						pool2, # base tensor to copy to output and overwrite on top of
+						bsize=_bsize,
+						boffset=_boffset,
+						bstride=_bstride,
+						add=False,
+						atomic=False, # use atomic or regular adds
+						transpose=False)
+			    conv3 = tf.reshape(conv3, [1, 
+						       input_pixel_size[0], 
+						       input_pixel_size[1], 
+						       num_channels], name='reshape_conv3')
+			    pool3 = slim.max_pool2d(conv3, [2, 2], scope='pool3')
+
+			    #===============================================================
+
+			    mask = masks_list[3]
+			    mask = tf.tile(tf.expand_dims(mask[:, :, :, 0], 3), [1, 1, 1, num_channels])
+			    input_pixel_size[0] = input_pixel_size[0] // 2
+			    input_pixel_size[1] = input_pixel_size[1] // 2
+			    _bsize = bsize_list[3]
+			    _boffset = boffset_list[3]
+			    _bstride = bstride_list[3]
+			    indices = sbnet_module.reduce_mask(
+				mask, tf.constant(bcounts, dtype=tf.int32),
+				bsize=_bsize,
+				boffset=_boffset,
+				bstride=_bstride,
+				tol=tol_threshold, # pooling threshold to consider a block as active
+				avgpool=True) # max pooling by default
+			    block_stack = sbnet_module.sparse_gather(
+						pool3,
+						indices.bin_counts,
+						indices.active_block_indices,
+						bsize=_bsize, # block size
+						boffset=_boffset, # block offset
+						bstride=_bstride, # block stride
+						transpose=False)
+			    block_stack = tf.reshape(block_stack, [-1, _bsize[0], _bsize[1], num_channels])
+			    operation_output = slim.repeat(block_stack,
+						vgg_config.vgg_conv4[0],
+						slim.conv2d,
+						vgg_config.vgg_conv4[1],
+						[3, 3],
+						normalizer_fn=slim.batch_norm,
+						normalizer_params={
+						    'is_training': is_training},
+						scope='conv4')
+			    num_channels = vgg_config.vgg_conv4[1]
+			    pool3 = tf.tile(tf.expand_dims(pool3[:, :, :, 0], -1), [1, 1, 1, num_channels])
+			    conv4 = sbnet_module.sparse_scatter(
+						operation_output,
+						indices.bin_counts,
+						indices.active_block_indices,
+						pool3, # base tensor to copy to output and overwrite on top of
+						bsize=_bsize,
+						boffset=_boffset,
+						bstride=_bstride,
+						add=False,
+						atomic=False, # use atomic or regular adds
+						transpose=False)
+			    conv4 = tf.reshape(conv4, [1, 
+						       input_pixel_size[0], 
+						       input_pixel_size[1], 
+						       num_channels], name='reshape_conv4')
+                    else:
+                    	    conv1 = slim.repeat(padded,
                                         vgg_config.vgg_conv1[0],
                                         slim.conv2d,
                                         vgg_config.vgg_conv1[1],
@@ -136,51 +324,9 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
                                         normalizer_params={
                                             'is_training': is_training},
                                         scope='conv1')
-                    num_channels = vgg_config.vgg_conv1[1]
-                    padded = tf.tile(tf.expand_dims(padded[:, :, :, 0], -1), [1, 1, 1, num_channels])
-                    conv1 = sbnet_module.sparse_scatter(
-					operation_output,
-					indices.bin_counts,
-					indices.active_block_indices,
-					padded, # base tensor to copy to output and overwrite on top of
-					bsize=_bsize,
-					boffset=_boffset,
-					bstride=_bstride,
-					add=False,
-					atomic=False, # use atomic or regular adds
-					transpose=False)
-                    conv1 = tf.reshape(conv1, [1, 
-					       input_pixel_size[0], 
-					       input_pixel_size[1], 
-					       num_channels], name='reshape_conv1')
-                    pool1 = slim.max_pool2d(conv1, [2, 2], scope='pool1')
+                            pool1 = slim.max_pool2d(conv1, [2, 2], scope='pool1')
 
-                    #===============================================================
-
-                    mask = masks_list[1]
-                    mask = tf.tile(tf.expand_dims(mask[:, :, :, 0], 3), [1, 1, 1, num_channels])
-                    input_pixel_size[0] = input_pixel_size[0] // 2
-                    input_pixel_size[1] = input_pixel_size[1] // 2
-                    _bsize = bsize_list[1]
-                    _boffset = boffset_list[1]
-                    _bstride = bstride_list[1]
-                    indices = sbnet_module.reduce_mask(
-			mask, tf.constant(bcounts, dtype=tf.int32),
-			bsize=_bsize,
-			boffset=_boffset,
-			bstride=_bstride,
-			tol=tol_threshold, # pooling threshold to consider a block as active
-			avgpool=True) # max pooling by default
-                    block_stack = sbnet_module.sparse_gather(
-					pool1,
-					indices.bin_counts,
-					indices.active_block_indices,
-					bsize=_bsize, # block size
-					boffset=_boffset, # block offset
-					bstride=_bstride, # block stride
-					transpose=False)
-                    block_stack = tf.reshape(block_stack, [-1, _bsize[0], _bsize[1], num_channels])
-                    operation_output = slim.repeat(block_stack,
+                            conv2 = slim.repeat(pool1,
                                         vgg_config.vgg_conv2[0],
                                         slim.conv2d,
                                         vgg_config.vgg_conv2[1],
@@ -189,51 +335,9 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
                                         normalizer_params={
                                             'is_training': is_training},
                                         scope='conv2')
-                    num_channels = vgg_config.vgg_conv2[1]
-                    pool1 = tf.tile(tf.expand_dims(pool1[:, :, :, 0], -1), [1, 1, 1, num_channels])
-                    conv2 = sbnet_module.sparse_scatter(
-					operation_output,
-					indices.bin_counts,
-					indices.active_block_indices,
-					pool1, # base tensor to copy to output and overwrite on top of
-					bsize=_bsize,
-					boffset=_boffset,
-					bstride=_bstride,
-					add=False,
-					atomic=False, # use atomic or regular adds
-					transpose=False)
-                    conv2 = tf.reshape(conv2, [1, 
-					       input_pixel_size[0], 
-					       input_pixel_size[1], 
-					       num_channels], name='reshape_conv2')
-                    pool2 = slim.max_pool2d(conv2, [2, 2], scope='pool2')
+                            pool2 = slim.max_pool2d(conv2, [2, 2], scope='pool2')
 
-                    #===============================================================
-
-                    mask = masks_list[2]
-                    mask = tf.tile(tf.expand_dims(mask[:, :, :, 0], 3), [1, 1, 1, num_channels])
-                    input_pixel_size[0] = input_pixel_size[0] // 2
-                    input_pixel_size[1] = input_pixel_size[1] // 2
-                    _bsize = bsize_list[2]
-                    _boffset = boffset_list[2]
-                    _bstride = bstride_list[2]
-                    indices = sbnet_module.reduce_mask(
-			mask, tf.constant(bcounts, dtype=tf.int32),
-			bsize=_bsize,
-			boffset=_boffset,
-			bstride=_bstride,
-			tol=tol_threshold, # pooling threshold to consider a block as active
-			avgpool=True) # max pooling by default
-                    block_stack = sbnet_module.sparse_gather(
-					pool2,
-					indices.bin_counts,
-					indices.active_block_indices,
-					bsize=_bsize, # block size
-					boffset=_boffset, # block offset
-					bstride=_bstride, # block stride
-					transpose=False)
-                    block_stack = tf.reshape(block_stack, [-1, _bsize[0], _bsize[1], num_channels])
-                    operation_output = slim.repeat(block_stack,
+                            conv3 = slim.repeat(pool2,
                                         vgg_config.vgg_conv3[0],
                                         slim.conv2d,
                                         vgg_config.vgg_conv3[1],
@@ -242,51 +346,9 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
                                         normalizer_params={
                                             'is_training': is_training},
                                         scope='conv3')
-                    num_channels = vgg_config.vgg_conv3[1]
-                    pool2 = tf.tile(tf.expand_dims(pool2[:, :, :, 0], -1), [1, 1, 1, num_channels])
-                    conv3 = sbnet_module.sparse_scatter(
-					operation_output,
-					indices.bin_counts,
-					indices.active_block_indices,
-					pool2, # base tensor to copy to output and overwrite on top of
-					bsize=_bsize,
-					boffset=_boffset,
-					bstride=_bstride,
-					add=False,
-					atomic=False, # use atomic or regular adds
-					transpose=False)
-                    conv3 = tf.reshape(conv3, [1, 
-					       input_pixel_size[0], 
-					       input_pixel_size[1], 
-					       num_channels], name='reshape_conv3')
-                    pool3 = slim.max_pool2d(conv3, [2, 2], scope='pool3')
+                            pool3 = slim.max_pool2d(conv3, [2, 2], scope='pool3')
 
-                    #===============================================================
-
-                    mask = masks_list[3]
-                    mask = tf.tile(tf.expand_dims(mask[:, :, :, 0], 3), [1, 1, 1, num_channels])
-                    input_pixel_size[0] = input_pixel_size[0] // 2
-                    input_pixel_size[1] = input_pixel_size[1] // 2
-                    _bsize = bsize_list[3]
-                    _boffset = boffset_list[3]
-                    _bstride = bstride_list[3]
-                    indices = sbnet_module.reduce_mask(
-			mask, tf.constant(bcounts, dtype=tf.int32),
-			bsize=_bsize,
-			boffset=_boffset,
-			bstride=_bstride,
-			tol=tol_threshold, # pooling threshold to consider a block as active
-			avgpool=True) # max pooling by default
-                    block_stack = sbnet_module.sparse_gather(
-					pool3,
-					indices.bin_counts,
-					indices.active_block_indices,
-					bsize=_bsize, # block size
-					boffset=_boffset, # block offset
-					bstride=_bstride, # block stride
-					transpose=False)
-                    block_stack = tf.reshape(block_stack, [-1, _bsize[0], _bsize[1], num_channels])
-                    operation_output = slim.repeat(block_stack,
+                            conv4 = slim.repeat(pool3,
                                         vgg_config.vgg_conv4[0],
                                         slim.conv2d,
                                         vgg_config.vgg_conv4[1],
@@ -295,23 +357,6 @@ class BevVggPyr(bev_feature_extractor.BevFeatureExtractor):
                                         normalizer_params={
                                             'is_training': is_training},
                                         scope='conv4')
-                    num_channels = vgg_config.vgg_conv4[1]
-                    pool3 = tf.tile(tf.expand_dims(pool3[:, :, :, 0], -1), [1, 1, 1, num_channels])
-                    conv4 = sbnet_module.sparse_scatter(
-					operation_output,
-					indices.bin_counts,
-					indices.active_block_indices,
-					pool3, # base tensor to copy to output and overwrite on top of
-					bsize=_bsize,
-					boffset=_boffset,
-					bstride=_bstride,
-					add=False,
-					atomic=False, # use atomic or regular adds
-					transpose=False)
-                    conv4 = tf.reshape(conv4, [1, 
-					       input_pixel_size[0], 
-					       input_pixel_size[1], 
-					       num_channels], name='reshape_conv4')
 
                     # Decoder (upsample and fuse features)
                     upconv3 = slim.conv2d_transpose(

@@ -10,7 +10,7 @@ import time
 
 def get_mask(input_tensor,model_unet,output_size = (800,704)):
 	# checkpoints_directory_unet="checkpoints_unet"
-
+	
 	# python api.py /path/to/image/imagename.extension 
 	#will give output in the folder containing script as Output_unet.png
 
@@ -67,9 +67,11 @@ def get_mask(input_tensor,model_unet,output_size = (800,704)):
 	else:
 		input_unet2 = Variable(input_unet2,volatile = True)
 
+        
 	input_unet = torch.cat((input_unet1,input_unet2), dim= 1)
-	out_unet = model_unet(input_unet)
-
+	#start_time = time.time()
+        out_unet = model_unet(input_unet)
+	#print(time.time()-start_time)
 
 	out_unet =  out_unet.cpu().data.numpy()
 

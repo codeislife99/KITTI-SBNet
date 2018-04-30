@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import torch
 from tensorflow.contrib import slim
+import time
 
 from avod.builders import feature_extractor_builder
 from avod.core import anchor_encoder
@@ -629,6 +630,7 @@ class RpnModel(model.DetectionModel):
             predictions[self.PRED_TOP_ANCHORS] = top_anchors
             predictions[
                 self.PRED_TOP_OBJECTNESS_SOFTMAX] = top_objectness_softmax
+            predictions['bev_features'] = self.bev_feature_maps
 
         else:
             # self._train_val_test == 'test'
@@ -715,7 +717,9 @@ class RpnModel(model.DetectionModel):
         bev_input = sample.get(constants.KEY_BEV_INPUT)
         
         # TODO: get the mask here!!!
+        #st_time = time.time()
         mask = api_AVOD.get_mask(np.expand_dims(bev_input, axis=0), self._U_Net_model)
+        #print(time.time() - st_time)
         #mask_shape = np.shape(bev_input)
         #mask = np.zeros((1, mask_shape[0] + 4, mask_shape[1], mask_shape[2])).astype(np.float32) + 1
         #mask = np.random.randn((1, mask_shape[1] + 4, mask_shape[2], mask_shape[3])).astype(np.float32) + 1
